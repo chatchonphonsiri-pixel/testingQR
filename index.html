@@ -166,6 +166,32 @@
       color: #fff;
     }
 
+    .inspector {
+      display: grid;
+      gap: 6px;
+    }
+
+    .inspector label {
+      color: #d4d4d8;
+      font-size: .85rem;
+    }
+
+    .inspector input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid #3f3f46;
+      border-radius: 12px;
+      padding: 0 14px;
+      background: #18181b;
+      color: #fafafa;
+      font: inherit;
+    }
+
+    .inspector input:focus {
+      border-color: #22c55e;
+      outline: 2px solid rgba(34, 197, 94, .2);
+    }
+
     .actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -263,6 +289,12 @@
       </div>
     </header>
 
+    <section class="inspector">
+      <label for="inspectorName">ชื่อผู้ตรวจ</label>
+      <input id="inspectorName" type="text" maxlength="100"
+        placeholder="กรอกชื่อผู้ตรวจก่อนเริ่มสแกน" autocomplete="name">
+    </section>
+
     <section class="scanner">
       <video id="video" playsinline muted></video>
       <div class="frame"><div class="line"></div></div>
@@ -295,6 +327,7 @@
     const personName = document.querySelector("#personName");
     const personDetail = document.querySelector("#personDetail");
     const sheetStatus = document.querySelector("#sheetStatus");
+    const inspectorName = document.querySelector("#inspectorName");
 
     const SHEET_ID = "12AZf8zXGj5uSHlpD-Sdo37oQ1rN6Xh1hIx2Tt68TxM8";
     const SHEET_GID = "453783738";
@@ -311,6 +344,20 @@
       status.textContent = text;
       status.classList.toggle("active", active);
     }
+
+    try {
+      inspectorName.value = localStorage.getItem("qrInspectorName") || "";
+    } catch {
+      // บางเบราว์เซอร์อาจไม่อนุญาตให้ใช้ localStorage
+    }
+
+    inspectorName.addEventListener("input", () => {
+      try {
+        localStorage.setItem("qrInspectorName", inspectorName.value.trim());
+      } catch {
+        // ยังสามารถสแกนได้แม้บันทึกชื่อในอุปกรณ์ไม่ได้
+      }
+    });
 
     window.receiveSheetData = function (response) {
       if (response.status === "error") {
@@ -371,6 +418,13 @@
 
     async function startCamera() {
       stopCamera();
+
+      if (!inspectorName.value.trim()) {
+        setStatus("กรุณากรอกชื่อผู้ตรวจ");
+        inspectorName.focus();
+        alert("กรุณากรอกชื่อผู้ตรวจก่อนเปิดกล้อง");
+        return;
+      }
 
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatus("เบราว์เซอร์ไม่รองรับกล้อง");
@@ -475,7 +529,10 @@
         const response = await fetch(CHECK_IN_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({
+            token,
+            checkedInBy: inspectorName.value.trim()
+          }),
           cache: "no-store"
         });
         const data = await response.json().catch(() => ({}));

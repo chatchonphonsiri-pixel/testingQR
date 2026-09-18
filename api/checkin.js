@@ -15,6 +15,11 @@ module.exports = async function handler(request, response) {
     return response.status(400).json({ error: "QR token ไม่ถูกต้อง" });
   }
 
+  const checkedInBy = request.body?.checkedInBy?.toString().trim();
+  if (!checkedInBy || checkedInBy.length > 100) {
+    return response.status(400).json({ error: "กรุณาระบุชื่อผู้ตรวจ" });
+  }
+
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   const spreadsheetId = process.env.GOOGLE_SHEET_ID;
@@ -51,7 +56,7 @@ module.exports = async function handler(request, response) {
     const rangePrefix = `'${escapedTitle}'`;
     const rowsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${rangePrefix}!A:H`
+      range: `${rangePrefix}!A:I`
     });
     const rows = rowsResponse.data.values || [];
     const rowIndex = rows.findIndex(
@@ -65,18 +70,40 @@ module.exports = async function handler(request, response) {
     const alreadyCheckedIn = rows[rowIndex][5]?.toString().trim() === "checked_in";
 
     if (!alreadyCheckedIn) {
-      await sheets.spreadsheets.values.update({
+      const updates = [
+        {
+          range: `${rangePrefix}!F${rowIndex + 1}`,
+          values: [["checked_in"]]
+        },
+        {
+          range: `${rangePrefix}!I${rowIndex + 1}`,
+          values: [[checkedInBy]]
+        }
+      ];
+
+      if (rows[0]?.[8]?.toString().trim() !== "checkedInBy") {
+        updates.unshift({
+          range: `${rangePrefix}!I1`,
+          values: [["checkedInBy"]]
+        });
+      }
+
+      await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId,
-        range: `${rangePrefix}!F${rowIndex + 1}`,
-        valueInputOption: "RAW",
-        requestBody: { values: [["checked_in"]] }
+        requestBody: {
+          valueInputOption: "RAW",
+          data: updates
+        }
       });
     }
 
     return response.status(200).json({
       ok: true,
       status: "checked_in",
-      alreadyCheckedIn
+      alreadyCheckedIn,
+      checkedInBy: alreadyCheckedIn
+        ? rows[rowIndex][8]?.toString().trim() || null
+        : checkedInBy
     });
   } catch (error) {
     console.error("Google Sheets check-in failed:", error);
