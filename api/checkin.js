@@ -1,6 +1,55 @@
 const { google } = require("googleapis");
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const CHECKED_IN_STATUS = "checked_in";
+const REQUIRED_HEADERS = Object.freeze({
+  token: "token",
+  status: "status",
+  checkedInBy: "checkedInBy"
+});
+
+function normalizeHeader(value) {
+  return value?.toString().trim().toLowerCase() || "";
+}
+
+function findUniqueHeaderIndex(headers, headerName) {
+  const expected = normalizeHeader(headerName);
+  const matches = headers
+    .map((header, index) => normalizeHeader(header) === expected ? index : -1)
+    .filter(index => index !== -1);
+
+  if (matches.length !== 1) {
+    throw new Error(`Expected exactly one "${headerName}" column, found ${matches.length}`);
+  }
+
+  return matches[0];
+}
+
+function getColumnIndexes(headers) {
+  return Object.fromEntries(
+    Object.entries(REQUIRED_HEADERS).map(([key, headerName]) => [
+      key,
+      findUniqueHeaderIndex(headers, headerName)
+    ])
+  );
+}
+
+function toColumnLetter(zeroBasedIndex) {
+  let index = zeroBasedIndex + 1;
+  let column = "";
+
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    column = String.fromCharCode(65 + remainder) + column;
+    index = Math.floor((index - 1) / 26);
+  }
+
+  return column;
+}
+
+function quoteSheetTitle(title) {
+  return `'${title.replace(/'/g, "''")}'`;
+}
 
 module.exports = async function handler(request, response) {
   response.setHeader("Cache-Control", "no-store");
@@ -52,58 +101,64 @@ module.exports = async function handler(request, response) {
       return response.status(500).json({ error: "ไม่พบแท็บที่กำหนดใน Google Sheet" });
     }
 
-    const escapedTitle = targetSheet.properties.title.replace(/'/g, "''");
-    const rangePrefix = `'${escapedTitle}'`;
-    const rowsResponse = await sheets.spreadsheets.values.get({
+    const rangePrefix = quoteSheetTitle(targetSheet.properties.title);
+    const headerResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${rangePrefix}!A:O`
+      range: `${rangePrefix}!1:1`
     });
-    const rows = rowsResponse.data.values || [];
-    const rowIndex = rows.findIndex(
-      (row, index) => index > 0 && row[7]?.toString().trim() === token
+    const headers = headerResponse.data.values?.[0] || [];
+    const columnIndexes = getColumnIndexes(headers);
+    const columns = Object.fromEntries(
+      Object.entries(columnIndexes).map(([key, index]) => [key, toColumnLetter(index)])
     );
 
-    if (rowIndex === -1) {
+    const columnValuesResponse = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId,
+      ranges: [
+        `${rangePrefix}!${columns.token}2:${columns.token}`,
+        `${rangePrefix}!${columns.status}2:${columns.status}`,
+        `${rangePrefix}!${columns.checkedInBy}2:${columns.checkedInBy}`
+      ]
+    });
+    const [tokenRows = [], statusRows = [], checkedInByRows = []] =
+      (columnValuesResponse.data.valueRanges || []).map(valueRange => valueRange.values || []);
+    const rowOffset = tokenRows.findIndex(
+      row => row[0]?.toString().trim() === token
+    );
+
+    if (rowOffset === -1) {
       return response.status(404).json({ error: "ไม่พบข้อมูลสำหรับ QR นี้" });
     }
 
-    const alreadyCheckedIn = rows[rowIndex][5]?.toString().trim() === "checked_in";
+    const sheetRow = rowOffset + 2;
+    const existingStatus = statusRows[rowOffset]?.[0]?.toString().trim();
+    const existingCheckedInBy = checkedInByRows[rowOffset]?.[0]?.toString().trim() || null;
+    const alreadyCheckedIn = existingStatus === CHECKED_IN_STATUS;
 
     if (!alreadyCheckedIn) {
-      const updates = [
-        {
-          range: `${rangePrefix}!F${rowIndex + 1}`,
-          values: [["checked_in"]]
-        },
-        {
-          range: `${rangePrefix}!O${rowIndex + 1}`,
-          values: [[checkedInBy]]
-        }
-      ];
-
-      if (rows[0]?.[14]?.toString().trim() !== "checkedInBy") {
-        updates.unshift({
-          range: `${rangePrefix}!O1`,
-          values: [["checkedInBy"]]
-        });
-      }
-
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId,
         requestBody: {
           valueInputOption: "RAW",
-          data: updates
+          data: [
+            {
+              range: `${rangePrefix}!${columns.status}${sheetRow}`,
+              values: [[CHECKED_IN_STATUS]]
+            },
+            {
+              range: `${rangePrefix}!${columns.checkedInBy}${sheetRow}`,
+              values: [[checkedInBy]]
+            }
+          ]
         }
       });
     }
 
     return response.status(200).json({
       ok: true,
-      status: "checked_in",
+      status: CHECKED_IN_STATUS,
       alreadyCheckedIn,
-      checkedInBy: alreadyCheckedIn
-        ? rows[rowIndex][14]?.toString().trim() || null
-        : checkedInBy
+      checkedInBy: alreadyCheckedIn ? existingCheckedInBy : checkedInBy
     });
   } catch (error) {
     console.error("Google Sheets check-in failed:", error);
