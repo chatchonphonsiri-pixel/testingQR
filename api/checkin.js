@@ -2,6 +2,9 @@ const { google } = require("googleapis");
 
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const CHECKED_IN_STATUS = "checked_in";
+const MILLISECONDS_PER_DAY = 86_400_000;
+const GOOGLE_SHEETS_EPOCH_OFFSET = 25_569;
+const THAILAND_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const REQUIRED_HEADERS = Object.freeze({
   token: "token",
   status: "status",
@@ -50,6 +53,40 @@ function toColumnLetter(zeroBasedIndex) {
 
 function quoteSheetTitle(title) {
   return `'${title.replace(/'/g, "''")}'`;
+}
+
+function toThailandDateSerial(date) {
+  return (
+    (date.getTime() + THAILAND_UTC_OFFSET_MS) / MILLISECONDS_PER_DAY
+    + GOOGLE_SHEETS_EPOCH_OFFSET
+  );
+}
+
+function createCellUpdate({ sheetId, rowIndex, columnIndex, value, numberFormat }) {
+  const userEnteredValue = typeof value === "number"
+    ? { numberValue: value }
+    : { stringValue: value };
+  const cell = { userEnteredValue };
+
+  if (numberFormat) {
+    cell.userEnteredFormat = { numberFormat };
+  }
+
+  return {
+    updateCells: {
+      range: {
+        sheetId,
+        startRowIndex: rowIndex,
+        endRowIndex: rowIndex + 1,
+        startColumnIndex: columnIndex,
+        endColumnIndex: columnIndex + 1
+      },
+      rows: [{ values: [cell] }],
+      fields: numberFormat
+        ? "userEnteredValue,userEnteredFormat.numberFormat"
+        : "userEnteredValue"
+    }
+  };
 }
 
 module.exports = async function handler(request, response) {
@@ -137,26 +174,39 @@ module.exports = async function handler(request, response) {
     const existingCheckedInAt = checkedInAtRows[rowOffset]?.[0]?.toString().trim() || null;
     const existingCheckedInBy = checkedInByRows[rowOffset]?.[0]?.toString().trim() || null;
     const alreadyCheckedIn = existingStatus === CHECKED_IN_STATUS;
-    const checkedInAt = new Date().toISOString();
+    const checkedInDate = new Date();
+    const checkedInAt = checkedInDate.toISOString();
 
     if (!alreadyCheckedIn) {
-      await sheets.spreadsheets.values.batchUpdate({
+      const zeroBasedRowIndex = sheetRow - 1;
+      const sheetId = targetSheet.properties.sheetId;
+
+      await sheets.spreadsheets.batchUpdate({
         spreadsheetId,
         requestBody: {
-          valueInputOption: "RAW",
-          data: [
-            {
-              range: `${rangePrefix}!${columns.status}${sheetRow}`,
-              values: [[CHECKED_IN_STATUS]]
-            },
-            {
-              range: `${rangePrefix}!${columns.checkedInAt}${sheetRow}`,
-              values: [[checkedInAt]]
-            },
-            {
-              range: `${rangePrefix}!${columns.checkedInBy}${sheetRow}`,
-              values: [[checkedInBy]]
-            }
+          requests: [
+            createCellUpdate({
+              sheetId,
+              rowIndex: zeroBasedRowIndex,
+              columnIndex: columnIndexes.status,
+              value: CHECKED_IN_STATUS
+            }),
+            createCellUpdate({
+              sheetId,
+              rowIndex: zeroBasedRowIndex,
+              columnIndex: columnIndexes.checkedInAt,
+              value: toThailandDateSerial(checkedInDate),
+              numberFormat: {
+                type: "DATE_TIME",
+                pattern: "dd/mm/yyyy hh:mm:ss"
+              }
+            }),
+            createCellUpdate({
+              sheetId,
+              rowIndex: zeroBasedRowIndex,
+              columnIndex: columnIndexes.checkedInBy,
+              value: checkedInBy
+            })
           ]
         }
       });
