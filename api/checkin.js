@@ -62,7 +62,9 @@ module.exports = async function handler(request, response) {
       return response.status(404).json({ error: "ไม่พบข้อมูลสำหรับ QR นี้" });
     }
 
-    if (rows[rowIndex][5]?.toString().trim() !== "checked_in") {
+    const alreadyCheckedIn = rows[rowIndex][5]?.toString().trim() === "checked_in";
+
+    if (!alreadyCheckedIn) {
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `${rangePrefix}!F${rowIndex + 1}`,
@@ -71,7 +73,11 @@ module.exports = async function handler(request, response) {
       });
     }
 
-    return response.status(200).json({ ok: true, status: "checked_in" });
+    return response.status(200).json({
+      ok: true,
+      status: "checked_in",
+      alreadyCheckedIn
+    });
   } catch (error) {
     console.error("Google Sheets check-in failed:", error);
     return response.status(500).json({

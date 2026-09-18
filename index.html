@@ -450,6 +450,15 @@
       result.classList.add("valid");
     }
 
+    function showAlreadyCheckedIn(registration) {
+      validationMessage.textContent = "ตั๋วใบนี้ได้รับการสแกนเพื่อเข้าร่วมงานเรียบร้อยแล้ว";
+      personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
+      personName.style.display = "inline";
+      personDetail.textContent = registration.ticketId || "";
+      personDetail.style.display = registration.ticketId ? "inline" : "none";
+      result.classList.remove("valid", "invalid");
+    }
+
     async function checkIn(token) {
       validationMessage.textContent = "กำลังยืนยันการเข้างาน...";
       result.classList.remove("valid", "invalid");
@@ -475,7 +484,11 @@
         const registration = registrations.get(token);
         if (registration) {
           registration.status = "checked_in";
-          showConfirmed(registration);
+          if (data.alreadyCheckedIn) {
+            showAlreadyCheckedIn(registration);
+          } else {
+            showConfirmed(registration);
+          }
         }
         setTimeout(loadSheetData, 1000);
       } catch (error) {
@@ -503,7 +516,7 @@
         personDetail.style.display = "none";
       } else if (registration) {
         if (registration.status === "checked_in") {
-          showConfirmed(registration);
+          showAlreadyCheckedIn(registration);
         } else {
           personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
           personName.style.display = "inline";
