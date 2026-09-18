@@ -308,7 +308,7 @@
     </section>
 
     <div class="actions">
-      <button id="cameraButton">เปิดกล้อง</button>
+      <button id="cameraButton" disabled>เปิดกล้อง</button>
       <button id="switchButton" class="secondary" disabled>สลับกล้อง</button>
     </div>
     <canvas id="canvas"></canvas>
@@ -345,6 +345,16 @@
       status.classList.toggle("active", active);
     }
 
+    function updateInspectorState() {
+      const hasInspectorName = Boolean(inspectorName.value.trim());
+      cameraButton.disabled = !hasInspectorName;
+
+      if (!hasInspectorName) {
+        if (scanning) stopCamera();
+        setStatus("กรุณากรอกชื่อผู้ตรวจ");
+      }
+    }
+
     try {
       inspectorName.value = localStorage.getItem("qrInspectorName") || "";
     } catch {
@@ -357,7 +367,9 @@
       } catch {
         // ยังสามารถสแกนได้แม้บันทึกชื่อในอุปกรณ์ไม่ได้
       }
+      updateInspectorState();
     });
+    updateInspectorState();
 
     window.receiveSheetData = function (response) {
       if (response.status === "error") {
