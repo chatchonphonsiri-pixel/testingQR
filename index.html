@@ -13,6 +13,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
     body {
       margin: 0;
@@ -166,6 +167,35 @@
       color: #fff;
     }
 
+    .inspector-gate {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .inspector-card {
+      width: min(100%, 420px);
+      display: grid;
+      gap: 14px;
+      padding: 24px;
+      border: 1px solid #3f3f46;
+      border-radius: 20px;
+      background: rgba(24, 24, 27, .96);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+    }
+
+    .inspector-card h1,
+    .inspector-card p {
+      margin: 0;
+    }
+
+    .inspector-card p {
+      color: #a1a1aa;
+      line-height: 1.55;
+    }
+
     .inspector {
       display: grid;
       gap: 6px;
@@ -280,7 +310,20 @@
   </style>
 </head>
 <body>
-  <main>
+  <section id="inspectorGate" class="inspector-gate">
+    <form id="inspectorForm" class="inspector-card">
+      <h1>ระบุชื่อผู้ตรวจ</h1>
+      <p>กรุณากรอกชื่อผู้ตรวจก่อนเข้าสู่หน้าสแกน</p>
+      <div class="inspector">
+        <label for="inspectorName">ชื่อผู้ตรวจ</label>
+        <input id="inspectorName" type="text" maxlength="100" required
+          placeholder="กรอกชื่อผู้ตรวจ" autocomplete="name">
+      </div>
+      <button type="submit">เข้าสู่หน้าสแกน</button>
+    </form>
+  </section>
+
+  <main id="scannerApp" hidden>
     <header>
       <h1>QR Scanner</h1>
       <div>
@@ -288,12 +331,6 @@
         <small id="sheetStatus">กำลังโหลดรายชื่อ...</small>
       </div>
     </header>
-
-    <section class="inspector">
-      <label for="inspectorName">ชื่อผู้ตรวจ</label>
-      <input id="inspectorName" type="text" maxlength="100"
-        placeholder="กรอกชื่อผู้ตรวจก่อนเริ่มสแกน" autocomplete="name">
-    </section>
 
     <section class="scanner">
       <video id="video" playsinline muted></video>
@@ -328,6 +365,9 @@
     const personDetail = document.querySelector("#personDetail");
     const sheetStatus = document.querySelector("#sheetStatus");
     const inspectorName = document.querySelector("#inspectorName");
+    const inspectorGate = document.querySelector("#inspectorGate");
+    const inspectorForm = document.querySelector("#inspectorForm");
+    const scannerApp = document.querySelector("#scannerApp");
 
     const SHEET_ID = "12AZf8zXGj5uSHlpD-Sdo37oQ1rN6Xh1hIx2Tt68TxM8";
     const SHEET_GID = "453783738";
@@ -370,6 +410,18 @@
       updateInspectorState();
     });
     updateInspectorState();
+
+    inspectorForm.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!inspectorName.value.trim()) {
+        inspectorName.focus();
+        return;
+      }
+
+      updateInspectorState();
+      inspectorGate.hidden = true;
+      scannerApp.hidden = false;
+    });
 
     window.receiveSheetData = function (response) {
       if (response.status === "error") {
