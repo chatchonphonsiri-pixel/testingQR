@@ -363,8 +363,36 @@
       document.body.appendChild(script);
     }
 
+    function getCameraErrorMessage(error) {
+      switch (error?.name) {
+        case "NotAllowedError":
+        case "SecurityError":
+          return "เบราว์เซอร์ไม่อนุญาตให้ใช้กล้อง กรุณากดอนุญาตกล้องในการตั้งค่าเว็บไซต์ แล้วลองใหม่";
+        case "NotFoundError":
+        case "DevicesNotFoundError":
+          return "ไม่พบกล้องในอุปกรณ์ กรุณาตรวจสอบว่ากล้องเชื่อมต่อและเปิดใช้งานอยู่";
+        case "NotReadableError":
+        case "TrackStartError":
+          return "กล้องกำลังถูกใช้งานโดยโปรแกรมหรือแท็บอื่น กรุณาปิด Camera, OBS, Zoom, Meet หรือแท็บอื่น แล้วลองใหม่";
+        case "OverconstrainedError":
+        case "ConstraintNotSatisfiedError":
+          return "กล้องไม่รองรับการตั้งค่าที่ร้องขอ กรุณาลองสลับกล้อง";
+        case "AbortError":
+          return "การเปิดกล้องถูกยกเลิก กรุณาลองใหม่";
+        default:
+          return "ไม่สามารถเปิดกล้องได้ กรุณาตรวจสอบสิทธิ์กล้องและลองใหม่";
+      }
+    }
+
     async function startCamera() {
       stopCamera();
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus("เบราว์เซอร์ไม่รองรับกล้อง");
+        alert("เบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาใช้ Chrome, Edge หรือ Safari ผ่าน HTTPS");
+        return;
+      }
+
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -382,8 +410,9 @@
         setStatus("กำลังสแกน", true);
         requestAnimationFrame(scanFrame);
       } catch (error) {
+        console.error("Unable to start camera:", error);
         setStatus("เปิดกล้องไม่สำเร็จ");
-        alert("ไม่สามารถเปิดกล้องได้ กรุณาอนุญาตใช้กล้อง และเปิดผ่าน HTTPS หรือ localhost");
+        alert(getCameraErrorMessage(error));
       }
     }
 
