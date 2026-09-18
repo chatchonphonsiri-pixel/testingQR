@@ -556,11 +556,27 @@
       }
     }
 
-    function showConfirmed(registration) {
+    function formatCheckedInAt(value) {
+      if (!value) return "";
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+
+      return new Intl.DateTimeFormat("th-TH", {
+        dateStyle: "medium",
+        timeStyle: "medium"
+      }).format(date);
+    }
+
+    function showConfirmed(registration, checkInDetails) {
       validationMessage.textContent = "✓ ยืนยันการเข้างานสำเร็จ";
       personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
       personName.style.display = "inline";
-      personDetail.textContent = [registration.ticketId, "checked_in"]
+      const checkedInTime = formatCheckedInAt(checkInDetails?.checkedInAt);
+      personDetail.textContent = [
+        registration.ticketId,
+        checkedInTime && `เวลา ${checkedInTime}`
+      ]
         .filter(Boolean)
         .join(" • ");
       personDetail.style.display = "inline";
@@ -568,12 +584,18 @@
       result.classList.add("valid");
     }
 
-    function showAlreadyCheckedIn(registration) {
+    function showAlreadyCheckedIn(registration, checkInDetails) {
       validationMessage.textContent = "ตั๋วใบนี้ได้รับการสแกนเพื่อเข้าร่วมงานเรียบร้อยแล้ว";
       personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
       personName.style.display = "inline";
-      personDetail.textContent = registration.ticketId || "";
-      personDetail.style.display = registration.ticketId ? "inline" : "none";
+      const checkedInTime = formatCheckedInAt(checkInDetails?.checkedInAt);
+      personDetail.textContent = [
+        registration.ticketId,
+        checkedInTime ? `เมื่อ ${checkedInTime}` : "ไม่พบเวลาที่บันทึกไว้"
+      ]
+        .filter(Boolean)
+        .join(" • ");
+      personDetail.style.display = "inline";
       result.classList.remove("valid", "invalid");
     }
 
@@ -606,9 +628,9 @@
         if (registration) {
           registration.status = "checked_in";
           if (data.alreadyCheckedIn) {
-            showAlreadyCheckedIn(registration);
+            showAlreadyCheckedIn(registration, data);
           } else {
-            showConfirmed(registration);
+            showConfirmed(registration, data);
           }
         }
         setTimeout(loadSheetData, 1000);
@@ -636,14 +658,10 @@
         personName.style.display = "none";
         personDetail.style.display = "none";
       } else if (registration) {
-        if (registration.status === "checked_in") {
-          showAlreadyCheckedIn(registration);
-        } else {
-          personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
-          personName.style.display = "inline";
-          personDetail.style.display = "none";
-          checkIn(token);
-        }
+        personName.textContent = `${registration.firstName} ${registration.lastName}`.trim() || "ไม่ระบุชื่อ";
+        personName.style.display = "inline";
+        personDetail.style.display = "none";
+        checkIn(token);
       } else {
         validationMessage.textContent = "✕ ไม่สามารถยืนยันการเข้างาน";
         personName.textContent = "ไม่พบข้อมูลใน Google Sheet";

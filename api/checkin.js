@@ -5,6 +5,7 @@ const CHECKED_IN_STATUS = "checked_in";
 const REQUIRED_HEADERS = Object.freeze({
   token: "token",
   status: "status",
+  checkedInAt: "checkedInAt",
   checkedInBy: "checkedInBy"
 });
 
@@ -117,10 +118,11 @@ module.exports = async function handler(request, response) {
       ranges: [
         `${rangePrefix}!${columns.token}2:${columns.token}`,
         `${rangePrefix}!${columns.status}2:${columns.status}`,
+        `${rangePrefix}!${columns.checkedInAt}2:${columns.checkedInAt}`,
         `${rangePrefix}!${columns.checkedInBy}2:${columns.checkedInBy}`
       ]
     });
-    const [tokenRows = [], statusRows = [], checkedInByRows = []] =
+    const [tokenRows = [], statusRows = [], checkedInAtRows = [], checkedInByRows = []] =
       (columnValuesResponse.data.valueRanges || []).map(valueRange => valueRange.values || []);
     const rowOffset = tokenRows.findIndex(
       row => row[0]?.toString().trim() === token
@@ -132,8 +134,10 @@ module.exports = async function handler(request, response) {
 
     const sheetRow = rowOffset + 2;
     const existingStatus = statusRows[rowOffset]?.[0]?.toString().trim();
+    const existingCheckedInAt = checkedInAtRows[rowOffset]?.[0]?.toString().trim() || null;
     const existingCheckedInBy = checkedInByRows[rowOffset]?.[0]?.toString().trim() || null;
     const alreadyCheckedIn = existingStatus === CHECKED_IN_STATUS;
+    const checkedInAt = new Date().toISOString();
 
     if (!alreadyCheckedIn) {
       await sheets.spreadsheets.values.batchUpdate({
@@ -144,6 +148,10 @@ module.exports = async function handler(request, response) {
             {
               range: `${rangePrefix}!${columns.status}${sheetRow}`,
               values: [[CHECKED_IN_STATUS]]
+            },
+            {
+              range: `${rangePrefix}!${columns.checkedInAt}${sheetRow}`,
+              values: [[checkedInAt]]
             },
             {
               range: `${rangePrefix}!${columns.checkedInBy}${sheetRow}`,
@@ -158,6 +166,7 @@ module.exports = async function handler(request, response) {
       ok: true,
       status: CHECKED_IN_STATUS,
       alreadyCheckedIn,
+      checkedInAt: alreadyCheckedIn ? existingCheckedInAt : checkedInAt,
       checkedInBy: alreadyCheckedIn ? existingCheckedInBy : checkedInBy
     });
   } catch (error) {
