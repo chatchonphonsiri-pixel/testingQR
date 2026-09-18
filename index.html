@@ -298,7 +298,7 @@
 
     const SHEET_ID = "12AZf8zXGj5uSHlpD-Sdo37oQ1rN6Xh1hIx2Tt68TxM8";
     const SHEET_GID = "453783738";
-    const CHECK_IN_ENDPOINT = "https://script.google.com/macros/s/AKfycbxJsCr_eKX83NKcBDLLsInJrFxqxSC2ZrMDVorq7xaco2bCil4qXhdaql-1kTsYtr34/exec";
+    const CHECK_IN_ENDPOINT = "/api/checkin";
     const registrations = new Map();
     let stream = null;
     let scanning = false;
@@ -306,7 +306,6 @@
     let lastValue = "";
     let lastDetectedAt = 0;
     let sheetLoaded = false;
-    let pendingToken = "";
 
     function setStatus(text, active = false) {
       status.textContent = text;
@@ -335,20 +334,6 @@
       }
       sheetLoaded = true;
       sheetStatus.textContent = `พร้อมตรวจสอบ ${registrations.size} รายการ`;
-
-      if (pendingToken) {
-        const registration = registrations.get(pendingToken);
-        if (registration?.status === "checked_in") {
-          showConfirmed(registration);
-        } else {
-          validationMessage.textContent = "✕ อัปเดตสถานะไม่สำเร็จ";
-          personDetail.textContent = "กรุณาล็อกอิน Google ด้วยบัญชีที่มีสิทธิ์ แล้วลองอีกครั้ง";
-          personDetail.style.display = "inline";
-          result.classList.remove("valid");
-          result.classList.add("invalid");
-        }
-        pendingToken = "";
-      }
     };
 
     function loadSheetData() {
@@ -466,12 +451,10 @@
     }
 
     async function checkIn(token) {
-      pendingToken = token;
       validationMessage.textContent = "กำลังยืนยันการเข้างาน...";
       result.classList.remove("valid", "invalid");
 
       if (location.protocol === "file:") {
-        pendingToken = "";
         validationMessage.textContent = "QR ถูกต้อง แต่ยังเช็คอินไม่ได้";
         personDetail.textContent = "กรุณาเปิดระบบผ่าน http://localhost:4651";
         personDetail.style.display = "inline";
@@ -480,16 +463,28 @@
       }
 
       try {
-        await fetch(`${CHECK_IN_ENDPOINT}?t=${encodeURIComponent(token)}`, {
-          mode: "no-cors",
-          credentials: "include",
+        const response = await fetch(CHECK_IN_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
           cache: "no-store"
         });
-      } catch {
-        // การตอบกลับแบบ no-cors อ่านค่าไม่ได้ จึงตรวจผลจริงจากชีตด้านล่าง
-      }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "อัปเดตสถานะไม่สำเร็จ");
 
-      setTimeout(loadSheetData, 1800);
+        const registration = registrations.get(token);
+        if (registration) {
+          registration.status = "checked_in";
+          showConfirmed(registration);
+        }
+        setTimeout(loadSheetData, 1000);
+      } catch (error) {
+        console.error("Unable to check in:", error);
+        validationMessage.textContent = "✕ อัปเดตสถานะไม่สำเร็จ";
+        personDetail.textContent = error.message || "กรุณาลองอีกครั้ง";
+        personDetail.style.display = "inline";
+        result.classList.add("invalid");
+      }
     }
 
     function showResult(value) {

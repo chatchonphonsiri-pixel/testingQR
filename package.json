@@ -1,0 +1,7 @@
+{
+  "name": "testing-qr",
+  "private": true,
+  "dependencies": {
+    "googleapis": "^181.0.0"
+  }
+}
