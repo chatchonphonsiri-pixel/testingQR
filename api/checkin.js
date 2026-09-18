@@ -56,7 +56,7 @@ module.exports = async function handler(request, response) {
     const rangePrefix = `'${escapedTitle}'`;
     const rowsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${rangePrefix}!A:I`
+      range: `${rangePrefix}!A:O`
     });
     const rows = rowsResponse.data.values || [];
     const rowIndex = rows.findIndex(
@@ -76,14 +76,14 @@ module.exports = async function handler(request, response) {
           values: [["checked_in"]]
         },
         {
-          range: `${rangePrefix}!I${rowIndex + 1}`,
+          range: `${rangePrefix}!O${rowIndex + 1}`,
           values: [[checkedInBy]]
         }
       ];
 
-      if (rows[0]?.[8]?.toString().trim() !== "checkedInBy") {
+      if (rows[0]?.[14]?.toString().trim() !== "checkedInBy") {
         updates.unshift({
-          range: `${rangePrefix}!I1`,
+          range: `${rangePrefix}!O1`,
           values: [["checkedInBy"]]
         });
       }
@@ -102,7 +102,7 @@ module.exports = async function handler(request, response) {
       status: "checked_in",
       alreadyCheckedIn,
       checkedInBy: alreadyCheckedIn
-        ? rows[rowIndex][8]?.toString().trim() || null
+        ? rows[rowIndex][14]?.toString().trim() || null
         : checkedInBy
     });
   } catch (error) {
